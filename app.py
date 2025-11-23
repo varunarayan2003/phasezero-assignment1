@@ -4,43 +4,28 @@ import re
 import streamlit as st
 from utils import download_video_then_extract_audio
 from deepgram import DeepgramClient
-import requests
 
-# ----------------------------------------------------
 # Streamlit Setup
-# ----------------------------------------------------
 st.set_page_config(page_title="Video Communication Analyzer", layout="centered")
-st.title("🎤 Video Communication Analyzer — Deepgram STT")
+st.title("🎤 Video Communication Analyzer — Deepgram Nova-2 STT")
 
-st.write("""
-This app:
-- Extracts audio from YouTube or MP4  
-- Transcribes audio using **Deepgram Nova-2 (Cloud)**  
-- Computes a **Clarity Score (0–100%)**  
-- Detects the **Key Focus Sentence**  
-""")
-
-# ----------------------------------------------------
 # Inputs
-# ----------------------------------------------------
-url_input = st.text_input("Enter YouTube or MP4 URL:")
-uploaded_file = st.file_uploader("Or upload a video (.mp4)", type=["mp4"])
+url_input = st.text_input("YouTube/MP4 URL:")
+uploaded_file = st.file_uploader("Or upload an MP4 file:", type=["mp4"])
 analyze_btn = st.button("Analyze")
 
-# ----------------------------------------------------
-# Heuristic scoring helpers
-# ----------------------------------------------------
+# Heuristic scoring tools
 STOPWORDS = {
     "the","a","an","and","or","but","if","then","so","on","in","at","for","with","to","of",
     "is","are","was","were","be","this","that","these","those","it","its","as","by","from",
     "they","their","we","our","you","your","i","me","my","he","she","him","her"
 }
+
 FILLERS = {"um","uh","like","you know","i mean","so","actually","basically","ok","okay"}
 sentence_split = re.compile(r'(?<=[.!?])\s+')
 
 def calc_clarity(text):
-    if not text.strip():
-        return 0
+    if not text.strip(): return 0
     low = text.lower()
     words = re.findall(r"\w+", low)
     total = len(words)
@@ -51,10 +36,8 @@ def calc_clarity(text):
     avg_len = sum(len(s.split()) for s in sentences) / max(1, len(sentences))
 
     score = 90 - min(40, filler_rate * 2)
-    if avg_len < 6:
-        score -= (6 - avg_len) * 2
-    if avg_len > 25:
-        score -= (avg_len - 25)
+    if avg_len < 6: score -= (6 - avg_len) * 2
+    if avg_len > 25: score -= (avg_len - 25)
     return max(0, min(100, int(score)))
 
 def calc_focus_sentence(text):
@@ -69,12 +52,12 @@ def calc_focus_sentence(text):
 
     def score(s):
         tokens = re.findall(r"\w+", s.lower())
-        return sum(freq.get(t, 0) for t in tokens)
+        return sum(freq.get(t,0) for t in tokens)
 
     return max(sentences, key=score)[:300]
 
 # ----------------------------------------------------
-# Deepgram Transcription (Correct v3 Method)
+# Deepgram Transcription (Correct v3 syntax)
 # ----------------------------------------------------
 def deepgram_transcribe(audio_path):
     key = os.getenv("DEEPGRAM_API_KEY")
@@ -82,14 +65,14 @@ def deepgram_transcribe(audio_path):
         st.error("Missing DEEPGRAM_API_KEY in Streamlit Secrets.")
         st.stop()
 
-    dg = DeepgramClient(key)
+    client = DeepgramClient(key)
 
     with open(audio_path, "rb") as f:
         audio_bytes = f.read()
 
-    response = dg.listen.prerecorded(
-        buffer=audio_bytes,
-        mimetype="audio/wav",
+    # ✔ Correct API for Deepgram SDK v3
+    response = client.transcription.prerecorded(
+        source={"buffer": audio_bytes, "mimetype": "audio/wav"},
         model="nova-2",
         smart_format=True
     )
@@ -98,15 +81,15 @@ def deepgram_transcribe(audio_path):
     return transcript
 
 # ----------------------------------------------------
-# MAIN LOGIC
+# Main Logic
 # ----------------------------------------------------
 if analyze_btn:
 
     if not url_input and not uploaded_file:
-        st.error("Please enter a URL or upload a file.")
+        st.error("Enter a URL or upload a video file.")
         st.stop()
 
-    # Step 1 — Extract audio
+    # Extract audio
     st.info("Extracting audio...")
     try:
         if uploaded_file:
@@ -122,8 +105,8 @@ if analyze_btn:
         st.error(f"Audio extraction failed: {e}")
         st.stop()
 
-    # Step 2 — Deepgram Transcription
-    st.info("Transcribing using Deepgram...")
+    # Transcribe
+    st.info("Transcribing with Deepgram Nova-2...")
     try:
         transcript = deepgram_transcribe(audio_path)
         st.success("Transcription complete!")
@@ -134,13 +117,10 @@ if analyze_btn:
         st.error(f"Transcription failed: {e}")
         st.stop()
 
-    # Step 3 — Analysis
-    st.info("Analyzing communication...")
+    # Analyze
     clarity = calc_clarity(transcript)
     focus = calc_focus_sentence(transcript)
 
-    st.success("Analysis complete!")
     st.metric("Clarity Score", f"{clarity}%")
-    st.write("**Communication Focus Sentence:**")
+    st.write("### Communication Focus Sentence")
     st.write(focus)
-
