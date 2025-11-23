@@ -4,22 +4,22 @@ import tempfile
 import re
 import streamlit as st
 from utils import download_video_then_extract_audio
-import whisper
+import stable_whisper
 import requests
 
 # ----------------------------------------------------
 # Streamlit UI
 # ----------------------------------------------------
 st.set_page_config(page_title="Video Communication Analyzer", layout="centered")
-st.title("Video Communication Analyzer — Whisper CPU + Optional DeepSeek")
+st.title("Video Communication Analyzer — Stable Whisper + Optional DeepSeek")
 
 st.markdown("""
-This app analyzes communication quality from a video:
+This app:
 
 - Extracts audio using FFmpeg  
-- Transcribes speech offline using **OpenAI Whisper (CPU)**  
-- Computes **Clarity Score (0–100%)**  
-- Extracts **Communication Focus**  
+- Transcribes speech offline using **Stable Whisper (CPU Safe)**  
+- Computes a **Clarity Score (0–100%)**  
+- Extracts the **Communication Focus**  
 
 If you set the environment variables:
 
@@ -28,19 +28,20 @@ DEEPSEEK_API_KEY
 DEEPSEEK_API_URL
 ```
 
-the app uses DeepSeek for improved scoring.
+the app uses DeepSeek for enhanced analysis.
 """)
 
 
 # ----------------------------------------------------
 # Inputs
 # ----------------------------------------------------
-url_input = st.text_input("Enter a YouTube or MP4 URL:")
+url_input = st.text_input("Enter YouTube or MP4 URL:")
 uploaded_file = st.file_uploader("Or upload a video (.mp4)", type=["mp4"])
 analyze_btn = st.button("Analyze")
 
+
 # ----------------------------------------------------
-# Scoring helpers
+# Heuristic Scoring Helpers
 # ----------------------------------------------------
 STOPWORDS = {
     "the","a","an","and","or","but","if","then","so","on","in","at","for","with","to","of",
@@ -49,6 +50,7 @@ STOPWORDS = {
 }
 
 FILLERS = {"um","uh","like","you know","i mean","so","actually","basically","ok","okay"}
+
 sentence_split = re.compile(r'(?<=[.!?])\s+')
 
 
@@ -61,10 +63,8 @@ def calc_clarity(text):
     total = len(words)
     filler_count = sum(low.count(f) for f in FILLERS)
 
-    # filler penalty
     filler_rate = (filler_count / max(1, total)) * 100
 
-    # sentence length
     sentences = [s.strip() for s in sentence_split.split(text) if s.strip()]
     avg_len = sum(len(s.split()) for s in sentences) / max(1, len(sentences))
 
@@ -123,6 +123,7 @@ def analyze_with_deepseek(transcript):
         if content.strip().startswith("{"):
             return eval(content)
         return None
+
     except:
         return None
 
@@ -137,7 +138,7 @@ if analyze_btn:
         st.stop()
 
     # Step 1 — Extract Audio
-    st.info("Extracting audio...")
+    st.info("Step 1 — Extracting audio...")
     try:
         if uploaded_file:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
@@ -149,34 +150,35 @@ if analyze_btn:
 
         st.success("Audio extracted.")
     except Exception as e:
-        st.error(f"Audio extraction failed: {e}")
+        st.error(f"Audio extraction error: {e}")
         st.stop()
 
-    # Step 2 — Whisper Transcription (CPU)
-    st.info("Transcribing audio with Whisper (CPU)...")
+    # Step 2 — Transcription using stable-ts
+    st.info("Step 2 — Transcribing audio offline...")
 
     try:
-        model = whisper.load_model("small")
+        model = stable_whisper.load_model("small")
         result = model.transcribe(audio_path)
-        transcript = result["text"]
+        transcript = result['text']
 
         st.success("Transcription complete!")
         st.subheader("Transcript")
         st.write(transcript)
-        st.download_button("Download transcript", transcript, "transcript.txt")
+
+        st.download_button("Download Transcript", transcript, "transcript.txt")
 
     except Exception as e:
         st.error(f"Transcription failed: {e}")
         st.stop()
 
     # Step 3 — Analysis
-    st.info("Analyzing transcript...")
+    st.info("Step 3 — Analyzing transcript...")
 
-    ds = analyze_with_deepseek(transcript)
+    ds_result = analyze_with_deepseek(transcript)
 
-    if ds:
-        clarity = ds["clarity_score"]
-        focus = ds["focus_sentence"]
+    if ds_result:
+        clarity = ds_result["clarity_score"]
+        focus = ds_result["focus_sentence"]
     else:
         clarity = calc_clarity(transcript)
         focus = calc_focus_sentence(transcript)
