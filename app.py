@@ -3,29 +3,29 @@ import tempfile
 import re
 import streamlit as st
 from utils import download_video_then_extract_audio
-from deepgram import DeepgramClient
+from deepgram import Deepgram
 
 # Streamlit Setup
 st.set_page_config(page_title="Video Communication Analyzer", layout="centered")
-st.title("🎤 Video Communication Analyzer — Deepgram Nova-2 STT")
+st.title("🎤 Video Communication Analyzer — Deepgram Nova-2 STT (v2 API)")
 
 # Inputs
 url_input = st.text_input("YouTube/MP4 URL:")
 uploaded_file = st.file_uploader("Or upload an MP4 file:", type=["mp4"])
 analyze_btn = st.button("Analyze")
 
-# Heuristic scoring tools
+# Heuristic Scoring Tools
 STOPWORDS = {
     "the","a","an","and","or","but","if","then","so","on","in","at","for","with","to","of",
     "is","are","was","were","be","this","that","these","those","it","its","as","by","from",
     "they","their","we","our","you","your","i","me","my","he","she","him","her"
 }
-
 FILLERS = {"um","uh","like","you know","i mean","so","actually","basically","ok","okay"}
 sentence_split = re.compile(r'(?<=[.!?])\s+')
 
 def calc_clarity(text):
-    if not text.strip(): return 0
+    if not text.strip():
+        return 0
     low = text.lower()
     words = re.findall(r"\w+", low)
     total = len(words)
@@ -57,7 +57,7 @@ def calc_focus_sentence(text):
     return max(sentences, key=score)[:300]
 
 # ----------------------------------------------------
-# Deepgram Transcription (version-safe)
+# Deepgram Transcription (v2 API — 100% Streamlit Safe)
 # ----------------------------------------------------
 def deepgram_transcribe(audio_path):
     key = os.getenv("DEEPGRAM_API_KEY")
@@ -65,15 +65,23 @@ def deepgram_transcribe(audio_path):
         st.error("Missing DEEPGRAM_API_KEY in Streamlit Secrets.")
         st.stop()
 
-    dg = DeepgramClient(api_key=key)
+    dg = Deepgram(key)  # ← v2 client
 
     with open(audio_path, "rb") as f:
-        response = dg.listen.prerecorded.transcribe_file(
-            file=f,
-            mimetype="audio/wav",
-            model="nova-2",
-            smart_format=True
-        )
+        audio_bytes = f.read()
+
+    # ✔ Correct Deepgram v2 API call (version-safe)
+    response = dg.transcription.prerecorded(
+        {
+            "buffer": audio_bytes,
+            "mimetype": "audio/wav"
+        },
+        {
+            "model": "nova-2",
+            "smart_format": True,
+            "punctuate": True
+        }
+    )
 
     transcript = response["results"]["channels"][0]["alternatives"][0]["transcript"]
     return transcript
@@ -87,7 +95,7 @@ if analyze_btn:
         st.error("Enter a URL or upload a video file.")
         st.stop()
 
-    # Extract audio
+    # Step 1 — Extract audio
     st.info("Extracting audio...")
     try:
         if uploaded_file:
@@ -103,7 +111,7 @@ if analyze_btn:
         st.error(f"Audio extraction failed: {e}")
         st.stop()
 
-    # Transcribe
+    # Step 2 — Transcribe
     st.info("Transcribing with Deepgram Nova-2...")
     try:
         transcript = deepgram_transcribe(audio_path)
@@ -115,7 +123,7 @@ if analyze_btn:
         st.error(f"Transcription failed: {e}")
         st.stop()
 
-    # Analyze
+    # Step 3 — Analyze
     clarity = calc_clarity(transcript)
     focus = calc_focus_sentence(transcript)
 

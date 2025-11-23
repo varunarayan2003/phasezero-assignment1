@@ -1,6 +1,6 @@
-
 streamlit==1.29.0
-deepgram-sdk==3.2.6
+deepgram-sdk==2.12.0
 pytube==15.0.0
 requests==2.32.3
 moviepy==1.0.3
+
