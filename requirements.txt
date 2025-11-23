@@ -1,0 +1,5 @@
+
+streamlit==1.29.0
+whispercpp==0.0.17
+pytube==15.0.0
+requests==2.32.3
