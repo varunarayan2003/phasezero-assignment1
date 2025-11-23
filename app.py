@@ -57,7 +57,7 @@ def calc_focus_sentence(text):
     return max(sentences, key=score)[:300]
 
 # ----------------------------------------------------
-# Deepgram Transcription (Correct v3 syntax)
+# Deepgram Transcription (version-safe)
 # ----------------------------------------------------
 def deepgram_transcribe(audio_path):
     key = os.getenv("DEEPGRAM_API_KEY")
@@ -65,17 +65,15 @@ def deepgram_transcribe(audio_path):
         st.error("Missing DEEPGRAM_API_KEY in Streamlit Secrets.")
         st.stop()
 
-    client = DeepgramClient(key)
+    dg = DeepgramClient(api_key=key)
 
     with open(audio_path, "rb") as f:
-        audio_bytes = f.read()
-
-    # ✔ Correct API for Deepgram SDK v3
-    response = client.transcription.prerecorded(
-        source={"buffer": audio_bytes, "mimetype": "audio/wav"},
-        model="nova-2",
-        smart_format=True
-    )
+        response = dg.listen.prerecorded.transcribe_file(
+            file=f,
+            mimetype="audio/wav",
+            model="nova-2",
+            smart_format=True
+        )
 
     transcript = response["results"]["channels"][0]["alternatives"][0]["transcript"]
     return transcript
