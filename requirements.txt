@@ -2,7 +2,5 @@
 streamlit==1.29.0
 pytube==15.0.0
 moviepy==1.0.3
-openai-whisper==20231117
 ffmpeg-python
-scipy==1.10.1
-torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+faster-whisper==0.10.1
