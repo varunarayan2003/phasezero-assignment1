@@ -30,13 +30,16 @@ def calc_clarity(text):
     total = len(words)
     filler_count = sum(1 for w in words if w in FILLERS)
     filler_rate = (filler_count / max(1, total)) * 100
+
     sentences = [s.strip() for s in sentence_split.split(text) if s.strip()]
     avg_len = sum(len(s.split()) for s in sentences) / max(1, len(sentences))
+
     score = 90 - min(40, filler_rate * 2)
     if avg_len < 6:
         score -= (6 - avg_len) * 2
     if avg_len > 25:
         score -= (avg_len - 25)
+
     return max(0, min(100, int(score)))
 
 def calc_focus_sentence(text):
@@ -50,7 +53,8 @@ def calc_focus_sentence(text):
     def score(s):
         tokens = re.findall(r"\w+", s.lower())
         return sum(freq.get(t, 0) for t in tokens)
-    return max(sentences, key=score)[:300]
+    best = max(sentences, key=score)
+    return best[:300]
 
 def whisper_transcribe(audio_path):
     model = WhisperModel("base", device="cpu", compute_type="int8")
@@ -61,7 +65,6 @@ def whisper_transcribe(audio_path):
     return text.strip()
 
 if analyze_btn:
-
     if not url_input and not uploaded_file:
         st.error("Enter a URL or upload a video file.")
         st.stop()
@@ -82,7 +85,6 @@ if analyze_btn:
                     temp_files.append(audio_path)
 
                 st.success("Audio extracted successfully!")
-
             except Exception as e:
                 st.error(f"Audio extraction failed: {e}")
                 st.stop()

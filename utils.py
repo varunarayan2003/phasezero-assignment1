@@ -3,12 +3,7 @@ from moviepy.editor import VideoFileClip
 import tempfile
 import os
 
-
 def download_video_then_extract_audio(source: str, is_local: bool = False) -> str:
-    """
-    Download or open a video, extract the audio, and return path to temp WAV file.
-    """
-
     if is_local:
         video_path = source
     else:
@@ -22,31 +17,20 @@ def download_video_then_extract_audio(source: str, is_local: bool = False) -> st
                 stream = yt.streams.filter(file_extension="mp4").first()
 
             video_path = stream.download()
-
         except Exception as e:
             raise RuntimeError(f"Failed to download video: {e}")
 
     temp_audio = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
     clip = None
-
     try:
         clip = VideoFileClip(video_path)
         if clip.audio is None:
-            raise RuntimeError("No audio stream found.")
-
+            raise RuntimeError("No audio track found in video.")
         clip.audio.write_audiofile(temp_audio.name, verbose=False, logger=None)
-
     finally:
         if clip:
-            try:
-                clip.close()
-            except:
-                pass
-
+            clip.close()
         if not is_local and os.path.exists(video_path):
-            try:
-                os.remove(video_path)
-            except:
-                pass
+            os.remove(video_path)
 
     return temp_audio.name
