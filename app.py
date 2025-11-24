@@ -3,11 +3,11 @@ import tempfile
 import re
 import streamlit as st
 from utils import download_video_then_extract_audio
-from faster_whisper import WhisperModel   # offline whisper
+import whisper   # OPENAI WHISPER (offline)
 
 # Streamlit Setup
 st.set_page_config(page_title="Video Communication Analyzer", layout="centered")
-st.title("🎤 Video Communication Analyzer — Offline Whisper STT")
+st.title("🎤 Video Communication Analyzer — Whisper STT (Offline)")
 
 # Inputs
 url_input = st.text_input("YouTube/MP4 URL:")
@@ -20,11 +20,13 @@ STOPWORDS = {
     "is","are","was","were","be","this","that","these","those","it","its","as","by","from",
     "they","their","we","our","you","your","i","me","my","he","she","him","her"
 }
+
 FILLERS = {"um","uh","like","you know","i mean","so","actually","basically","ok","okay"}
 sentence_split = re.compile(r'(?<=[.!?])\s+')
 
 def calc_clarity(text):
-    if not text.strip(): return 0
+    if not text.strip(): 
+        return 0
     low = text.lower()
     words = re.findall(r"\w+", low)
     total = len(words)
@@ -35,13 +37,16 @@ def calc_clarity(text):
     avg_len = sum(len(s.split()) for s in sentences) / max(1, len(sentences))
 
     score = 90 - min(40, filler_rate * 2)
-    if avg_len < 6: score -= (6 - avg_len) * 2
-    if avg_len > 25: score -= (avg_len - 25)
+    if avg_len < 6:
+        score -= (6 - avg_len) * 2
+    if avg_len > 25:
+        score -= (avg_len - 25)
     return max(0, min(100, int(score)))
 
 def calc_focus_sentence(text):
     sentences = [s.strip() for s in sentence_split.split(text) if s.strip()]
-    if not sentences: return text.strip()
+    if not sentences:
+        return text.strip()
 
     freq = {}
     for w in re.findall(r"\w+", text.lower()):
@@ -49,22 +54,18 @@ def calc_focus_sentence(text):
             freq[w] = freq.get(w, 0) + 1
 
     def score(s):
-        return sum(freq.get(t,0) for t in re.findall(r"\w+", s.lower()))
+        tokens = re.findall(r"\w+", s.lower())
+        return sum(freq.get(t,0) for t in tokens)
 
     return max(sentences, key=score)[:300]
 
 # -----------------------------
-# Offline Whisper Transcription
+# Whisper Transcription (Offline, no API needed)
 # -----------------------------
 def whisper_transcribe(audio_path):
-    model = WhisperModel("tiny")   # tiny, base, small
-    segments, info = model.transcribe(audio_path)
-
-    transcript = ""
-    for seg in segments:
-        transcript += seg.text + " "
-
-    return transcript.strip()
+    model = whisper.load_model("base")   # base | tiny | small
+    result = model.transcribe(audio_path)
+    return result["text"]
 
 # -----------------------------
 # MAIN LOGIC
@@ -72,10 +73,10 @@ def whisper_transcribe(audio_path):
 if analyze_btn:
 
     if not url_input and not uploaded_file:
-        st.error("Enter a URL or upload a video.")
+        st.error("Enter a URL or upload a video file.")
         st.stop()
 
-    # Step 1: Extract audio
+    # Step 1 — Extract audio
     st.info("Extracting audio...")
     try:
         if uploaded_file:
@@ -91,17 +92,19 @@ if analyze_btn:
         st.error(f"Audio extraction failed: {e}")
         st.stop()
 
-    # Step 2: Transcribe offline
-    st.info("Transcribing using offline Whisper...")
+    # Step 2 — Whisper STT
+    st.info("Transcribing using Whisper (offline)...")
     try:
         transcript = whisper_transcribe(audio_path)
         st.success("Transcription complete!")
+        st.subheader("Transcript")
         st.write(transcript)
+        st.download_button("Download Transcript", transcript, "transcript.txt")
     except Exception as e:
         st.error(f"Transcription failed: {e}")
         st.stop()
 
-    # Step 3: Analysis
+    # Step 3 — Analysis
     clarity = calc_clarity(transcript)
     focus = calc_focus_sentence(transcript)
 
