@@ -1,5 +1,8 @@
+
 streamlit==1.29.0
 pytube==15.0.0
 moviepy==1.0.3
 openai-whisper==20231117
 ffmpeg-python
+# optional but recommended for faster inference:
+# faster-whisper
