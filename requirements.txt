@@ -4,5 +4,5 @@ pytube==15.0.0
 moviepy==1.0.3
 openai-whisper==20231117
 ffmpeg-python
-# optional but recommended for faster inference:
-# faster-whisper
+scipy==1.10.1
+torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
