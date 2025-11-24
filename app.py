@@ -3,22 +3,18 @@ import tempfile
 import re
 import streamlit as st
 from utils import download_video_then_extract_audio
-import requests
+from faster_whisper import WhisperModel   # offline whisper
 
-# -----------------------------
-# Streamlit UI Setup
-# -----------------------------
-st.set_page_config(page_title="Deepseek Video Analyzer", layout="centered")
-st.title("🎤 Video Communication Analyzer — Deepseek Whisper STT")
+# Streamlit Setup
+st.set_page_config(page_title="Video Communication Analyzer", layout="centered")
+st.title("🎤 Video Communication Analyzer — Offline Whisper STT")
 
 # Inputs
 url_input = st.text_input("YouTube/MP4 URL:")
 uploaded_file = st.file_uploader("Or upload an MP4 file:", type=["mp4"])
 analyze_btn = st.button("Analyze")
 
-# -----------------------------
-# Clarity & Focus Metrics
-# -----------------------------
+# Heuristic Tools
 STOPWORDS = {
     "the","a","an","and","or","but","if","then","so","on","in","at","for","with","to","of",
     "is","are","was","were","be","this","that","these","those","it","its","as","by","from",
@@ -27,13 +23,11 @@ STOPWORDS = {
 FILLERS = {"um","uh","like","you know","i mean","so","actually","basically","ok","okay"}
 sentence_split = re.compile(r'(?<=[.!?])\s+')
 
-
 def calc_clarity(text):
     if not text.strip(): return 0
     low = text.lower()
     words = re.findall(r"\w+", low)
     total = len(words)
-
     filler_count = sum(low.count(f) for f in FILLERS)
     filler_rate = (filler_count / max(1, total)) * 100
 
@@ -41,13 +35,9 @@ def calc_clarity(text):
     avg_len = sum(len(s.split()) for s in sentences) / max(1, len(sentences))
 
     score = 90 - min(40, filler_rate * 2)
-    if avg_len < 6:
-        score -= (6 - avg_len) * 2
-    if avg_len > 25:
-        score -= (avg_len - 25)
-
+    if avg_len < 6: score -= (6 - avg_len) * 2
+    if avg_len > 25: score -= (avg_len - 25)
     return max(0, min(100, int(score)))
-
 
 def calc_focus_sentence(text):
     sentences = [s.strip() for s in sentence_split.split(text) if s.strip()]
@@ -59,37 +49,22 @@ def calc_focus_sentence(text):
             freq[w] = freq.get(w, 0) + 1
 
     def score(s):
-        return sum(freq.get(t, 0) for t in re.findall(r"\w+", s.lower()))
+        return sum(freq.get(t,0) for t in re.findall(r"\w+", s.lower()))
 
     return max(sentences, key=score)[:300]
 
-
 # -----------------------------
-# Deepseek Audio Transcription
+# Offline Whisper Transcription
 # -----------------------------
-def deepseek_transcribe(audio_path):
-    api_key = os.getenv("DEEPSEEK_API_KEY")
-    if not api_key:
-        st.error("Missing DEEPSEEK_API_KEY in Streamlit Secrets.")
-        st.stop()
+def whisper_transcribe(audio_path):
+    model = WhisperModel("tiny")   # tiny, base, small
+    segments, info = model.transcribe(audio_path)
 
-    url = "https://api.deepseek.com/v1/audio/transcriptions"
+    transcript = ""
+    for seg in segments:
+        transcript += seg.text + " "
 
-    with open(audio_path, "rb") as f:
-        files = {"file": f}
-        data = {"model": "deepseek-whisper"}  # Deepseek whisper model
-
-        headers = {
-            "Authorization": f"Bearer {api_key}"
-        }
-
-        response = requests.post(url, headers=headers, files=files, data=data)
-
-    if response.status_code != 200:
-        raise Exception(f"Deepseek Error: {response.text}")
-
-    return response.json().get("text", "")
-
+    return transcript.strip()
 
 # -----------------------------
 # MAIN LOGIC
@@ -100,14 +75,13 @@ if analyze_btn:
         st.error("Enter a URL or upload a video.")
         st.stop()
 
-    # Step 1: Extract Audio
+    # Step 1: Extract audio
     st.info("Extracting audio...")
     try:
         if uploaded_file:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
                 tmp.write(uploaded_file.read())
                 video_path_local = tmp.name
-
             audio_path = download_video_then_extract_audio(video_path_local, True)
         else:
             audio_path = download_video_then_extract_audio(url_input, False)
@@ -117,14 +91,12 @@ if analyze_btn:
         st.error(f"Audio extraction failed: {e}")
         st.stop()
 
-    # Step 2: Transcribe with Deepseek
-    st.info("Transcribing using Deepseek Whisper...")
+    # Step 2: Transcribe offline
+    st.info("Transcribing using offline Whisper...")
     try:
-        transcript = deepseek_transcribe(audio_path)
+        transcript = whisper_transcribe(audio_path)
         st.success("Transcription complete!")
-        st.subheader("Transcript")
         st.write(transcript)
-        st.download_button("Download Transcript", transcript, "transcript.txt")
     except Exception as e:
         st.error(f"Transcription failed: {e}")
         st.stop()
